@@ -9,3 +9,13 @@ coverage/
 .npmrc
 # IMPORTANT: dist/ MUST be committed for the action to be runnable
 # directly from a git ref. Do NOT add dist/ to .gitignore.
+
+# Defense-in-depth: vault-shaped files should never appear here.
+# The only legitimate location is ~/.envpact/secrets/.
+secrets.json
+age.key
+*.age
+*.pem
+*.key
+!**/lib/key.js
+!**/lib/key.ts
