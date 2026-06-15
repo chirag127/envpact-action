@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: chirag127/envpact-action@v1
+      - uses: chirag127/envpact-action@v0
         with:
           vault-repo: chirag127/envpact-secrets
           vault-token: ${{ secrets.ENVPACT_VAULT_TOKEN }}
