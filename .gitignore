@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.nyc_output/
+*.tgz
+.npmrc
+# IMPORTANT: dist/ MUST be committed for the action to be runnable
+# directly from a git ref. Do NOT add dist/ to .gitignore.

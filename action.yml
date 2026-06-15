@@ -1,0 +1,51 @@
+name: 'envpact'
+description: 'Resolve environment secrets from your private envpact vault and generate .env files for CI/CD'
+author: 'chirag127'
+
+branding:
+  icon: 'lock'
+  color: 'green'
+
+inputs:
+  vault-repo:
+    description: 'Private vault repository slug (e.g. "chirag127/envpact-secrets")'
+    required: true
+  vault-token:
+    description: 'GitHub PAT with read access to the vault repo'
+    required: true
+  project-name:
+    description: 'Project to resolve secrets for. Defaults to current repository name.'
+    required: false
+    default: ''
+  environment:
+    description: 'Environment to resolve (development/staging/production). Defaults to "default".'
+    required: false
+    default: ''
+  output-file:
+    description: 'Path to write the resolved .env file'
+    required: false
+    default: '.env'
+  env-example:
+    description: 'Path to the .env.example file'
+    required: false
+    default: '.env.example'
+  export-to-env:
+    description: 'If true, also export resolved secrets as environment variables for subsequent steps'
+    required: false
+    default: 'false'
+  sync-github-secrets:
+    description: 'If true, sync resolved secrets to repository secrets (requires admin PAT in GH_ADMIN_TOKEN env)'
+    required: false
+    default: 'false'
+
+outputs:
+  resolved-count:
+    description: 'Number of secrets successfully resolved'
+  env-file-path:
+    description: 'The path to the generated .env file'
+  unresolved-keys:
+    description: 'Comma-separated list of keys that could not be resolved'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

@@ -1,0 +1,29 @@
+{
+  "name": "envpact-action",
+  "version": "0.1.0",
+  "description": "GitHub Action for envpact — sync secrets from your private vault to CI/CD",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "esbuild src/index.js --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --packages=external && cp src/index.js dist/index.cjs.js || true",
+    "build:simple": "node scripts/build.js"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/exec": "^1.1.1"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.3"
+  },
+  "author": "Chirag Singhal <whyiswhen@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://envpact.oriz.in",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chirag127/envpact-action.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
