@@ -16,6 +16,7 @@ import * as fsDefault from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveProject, upgradeVault, ENC_PREFIX } from './resolver.js';
+import { formatTimestampInline } from './timestamps.js';
 
 function parseEnvExample(fs, filePath) {
   if (!fs.existsSync(filePath)) return [];
@@ -150,6 +151,22 @@ export async function run(deps = {}) {
     // are returned defensively normalised. The on-disk vault is not
     // rewritten — the action only reads.
     const vault = upgradeVault(rawVault);
+
+    // SHARED_SPEC §1.5: surface timestamps in BOTH UTC (verbatim) and
+    // IST so a human reading the workflow log can correlate against
+    // the local engineering wall-clock without doing TZ math. The
+    // vault stores ISO-8601 UTC; we never mutate it.
+    const vaultUpdatedAt = vault.metadata && vault.metadata.updated_at;
+    if (typeof vaultUpdatedAt === 'string' && vaultUpdatedAt.length > 0) {
+      try {
+        core.info(`vault updated_at: ${formatTimestampInline(vaultUpdatedAt)}`);
+      } catch {
+        // Malformed timestamp — fall back to the raw value rather
+        // than abort the whole run over a log-cosmetic feature.
+        core.info(`vault updated_at: ${vaultUpdatedAt}`);
+      }
+    }
+
     const result = resolveProject(vault, projectName);
 
     if (result.missing) {
