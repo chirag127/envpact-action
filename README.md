@@ -31,7 +31,6 @@ jobs:
         with:
           vault-repo: chirag127/envpact-secrets
           vault-token: ${{ secrets.ENVPACT_VAULT_TOKEN }}
-          environment: production
           export-to-env: true
 
       - run: npm ci && npm run build && npm run deploy
@@ -45,7 +44,6 @@ jobs:
 | `vault-repo` | yes | — | Vault repository slug (e.g. `chirag127/envpact-secrets`). |
 | `vault-token` | yes | — | PAT with read access to the vault repo. Pass via secrets. |
 | `project-name` | no | repo name | Override the auto-detected project name. |
-| `environment` | no | `default` | Environment to resolve (development/staging/production). |
 | `output-file` | no | `.env` | Where to write the resolved file. |
 | `env-example` | no | `.env.example` | Path to `.env.example` for required-key ordering. |
 | `export-to-env` | no | `false` | If `true`, also `core.exportVariable` each resolved key. |
@@ -58,6 +56,38 @@ jobs:
 | `resolved-count` | Number of secrets successfully resolved. |
 | `env-file-path` | Path to the generated `.env`. |
 | `unresolved-keys` | Comma-separated unresolved key names. |
+
+## Migration from v0.2.x
+
+The `environment` input was removed in **v0.3.0**. The vault schema
+is now flat and single-environment per project (see
+[SHARED_SPEC §1](https://github.com/chirag127/envpact/blob/main/_build/specs/SHARED_SPEC.md)).
+Drop the line from your workflow:
+
+```diff
+   - uses: chirag127/envpact-action@v0
+     with:
+       vault-repo: chirag127/envpact-secrets
+       vault-token: ${{ secrets.ENVPACT_VAULT_TOKEN }}
+-      environment: production
+```
+
+**v1 / v2 vaults are auto-upgraded in memory on every run.** A
+one-time warning is logged when the action sees a pre-v3 vault:
+
+```
+envpact: upgrading vault from v2 → v3. Per-environment values will
+be flattened. Backup at pre-v3-migration branch (if you didn't make
+one, abort now).
+```
+
+The on-disk vault file is **not** rewritten by the action — only
+explicit pushes through `envpact-cli`, `envpact-mcp`, or the VS Code
+extension persist the upgrade. For v2 vaults with multiple
+environments per key, the action picks one value with priority
+`default` → `production` → first non-empty. To keep multi-environment
+isolation in v3, split into multiple project names (e.g.
+`my-app-prod` / `my-app-dev`).
 
 ## Setup
 
@@ -93,8 +123,7 @@ gh secret set ENVPACT_VAULT_TOKEN --body "<paste-pat>" --org chirag127 --visibil
 
 See the example above. The action fetches `secrets.json` via the
 GitHub Contents API (no full clone), resolves the requested
-project + environment, masks all values in logs, and writes
-`.env`.
+project, masks all values in logs, and writes `.env`.
 
 ## Security Model
 
@@ -105,6 +134,9 @@ project + environment, masks all values in logs, and writes
 - The default `vault-token` only needs read access to one repo.
 - For `sync-github-secrets: true`, you also need an admin PAT in
   `GH_ADMIN_TOKEN` env — keep this scoped to the consuming repo.
+- Encrypted (`enc:*`) values are **refused** by the action runtime
+  (no decryption keys on the runner). Decrypt with `envpact-cli`
+  before publishing the vault.
 
 ## License
 

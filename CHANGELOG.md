@@ -1,6 +1,61 @@
 # Changelog
 
-## [Unreleased]
+All notable changes to this project are documented here. Format
+based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [0.3.0] - 2026-06-19
+
+### Changed (BREAKING)
+
+- **Vault schema bumped to v3.** Project secrets are now flat,
+  single-environment, and per-key timestamped. The `environment`
+  action input is **removed**; it has no meaning under v3. Workflows
+  that pass `environment:` will need to drop the line. v1 and v2
+  vaults are auto-upgraded in memory on every run per
+  [SHARED_SPEC §1.4](https://github.com/chirag127/envpact/blob/main/_build/specs/SHARED_SPEC.md):
+  - v2 per-environment objects collapse to a single value with
+    priority `default` → `production` → first non-empty.
+  - v1 flat-string entries get wrapped into the v3
+    `{value, _modified_at}` shape.
+  - The on-disk vault is **not** rewritten by the action; only
+    explicit pushes through CLI/MCP/VS Code do that.
+- **`# environment:` header line removed** from generated `.env`
+  files. Only `# project:` is emitted now.
+
+### Migration from 0.2.x
+
+```diff
+   - uses: chirag127/envpact-action@v0
+     with:
+       vault-repo: chirag127/envpact-secrets
+       vault-token: ${{ secrets.ENVPACT_VAULT_TOKEN }}
+-      environment: production
+       export-to-env: true
+```
+
+If your vault still has v2 per-environment objects, the action will
+print a one-time `envpact: upgrading vault from v2 → v3 …` warning
+and pick the `default` (or `production`) value per key. Run
+`envpact --help` to migrate the on-disk vault permanently.
+
+### Preserved
+
+- AUDIT #6 fail-fast: `enc:*` values still abort the run via
+  `core.setFailed(...)` before any side effect.
+- AUDIT #3 ordering invariant: `core.setSecret(v)` for every resolved
+  value runs before the first `fs.writeFileSync(...)`. Pinned by
+  `tests/index.test.js`.
+
+### Internal
+
+- `src/resolver.js` rewritten to mirror `envpact-cli/lib/resolver.js`
+  (v3) and `envpact-mcp/src/lib/resolver.js` (ESM): adds
+  `upgradeVault`, `entryValue`, `validateVault` exports and drops the
+  `environment` parameter from `resolveProject`.
+- `dist/index.js` rebuilt via `@vercel/ncc` (483 KB).
+
+## [0.2.0]
 
 ### Changed (BREAKING but correct)
 
@@ -29,10 +84,6 @@
   AUDIT #6 fail-fast paths (direct `enc:`, `shared.*` -> `enc:`, no
   side effects when failure fires).
 
-> Note: `dist/index.js` (the bundled artifact GitHub Actions consumes)
-> is **not** rebuilt in this entry. Bundling is handled at release time
-> when v0.2.0 is tagged.
-
 ## [0.1.0] - 2026-06-15
 
 ### Added
@@ -47,4 +98,6 @@
 - Bundled as Node 20 action via @vercel/ncc.
 - Bit-for-bit identical resolver semantics with envpact-cli.
 
+[0.3.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.3.0
+[0.2.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.2.0
 [0.1.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.1.0

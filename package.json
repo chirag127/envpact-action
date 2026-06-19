@@ -1,6 +1,6 @@
 {
   "name": "envpact-action",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "GitHub Action for envpact — sync secrets from your private vault to CI/CD",
   "private": true,
   "type": "module",
