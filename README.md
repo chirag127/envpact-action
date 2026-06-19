@@ -146,3 +146,9 @@ project, masks all values in logs, and writes `.env`.
 ## License
 
 MIT © Chirag Singhal — see [LICENSE](./LICENSE).
+
+## Documentation
+
+- **[Repo docs (`docs/README.md`)](./docs/README.md)** — full API + usage reference for envpact-action
+- **[Project umbrella site](https://chirag127.github.io/envpact/)** — overview of all envpact components, security model, quick start
+- **[Live dashboard](https://envpact.oriz.in)** — visual vault management
