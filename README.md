@@ -137,6 +137,11 @@ project, masks all values in logs, and writes `.env`.
 - Encrypted (`enc:*`) values are **refused** by the action runtime
   (no decryption keys on the runner). Decrypt with `envpact-cli`
   before publishing the vault.
+- Timestamps in the workflow log are rendered in **dual UTC + IST**
+  format (`<ISO-UTC> (YYYY-MM-DD HH:MM:SS IST)`) per
+  [SHARED_SPEC §1.5](https://github.com/chirag127/envpact/blob/main/_build/specs/SHARED_SPEC.md).
+  The vault on-disk format is unchanged; this is a log-readability
+  feature only and is independent of the runner's host timezone.
 
 ## License
 

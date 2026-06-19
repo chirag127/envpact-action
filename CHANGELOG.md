@@ -4,6 +4,30 @@ All notable changes to this project are documented here. Format
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-06-19
+
+### Added
+
+- **IST timestamp rendering in log output (per spec §1.5).** The
+  vault's `metadata.updated_at` is now logged as
+  `<UTC> (<YYYY-MM-DD HH:MM:SS IST>)` so a human reading the workflow
+  log can correlate the vault timestamp with the local engineering
+  wall-clock without doing TZ math. The vault on-disk format is
+  unchanged — `_modified_at` is still stored as canonical ISO-8601
+  UTC. **No behavioural change** to resolution, masking, or
+  `.env` writing — purely a log readability improvement.
+- New `src/timestamps.js` (ESM) exporting `formatTimestamp(iso)` and
+  `formatTimestampInline(iso)`. Mirrors `envpact-cli/lib/timestamps.js`
+  bit-for-bit modulo ESM packaging.
+- `tests/timestamps.test.js` — host-TZ-independent IST format tests
+  (the load-bearing one runs with `process.env.TZ='America/Los_Angeles'`
+  to prove the formatter ignores host TZ).
+
+### Internal
+
+- Zero new runtime dependencies — `Intl.DateTimeFormat` is stdlib.
+- `dist/index.js` rebuilt via `@vercel/ncc`.
+
 ## [0.3.0] - 2026-06-19
 
 ### Changed (BREAKING)
@@ -98,6 +122,7 @@ and pick the `default` (or `production`) value per key. Run
 - Bundled as Node 20 action via @vercel/ncc.
 - Bit-for-bit identical resolver semantics with envpact-cli.
 
+[0.4.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.4.0
 [0.3.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.3.0
 [0.2.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.2.0
 [0.1.0]: https://github.com/chirag127/envpact-action/releases/tag/v0.1.0

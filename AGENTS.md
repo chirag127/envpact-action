@@ -22,6 +22,8 @@ for solo developers managing many public GitHub repos).
   bit-for-bit, ESM-converted).
 - Masks every resolved value via `core.setSecret` BEFORE the first
   `fs.writeFileSync`.
+- Logs `metadata.updated_at` in dual UTC + IST format per
+  SHARED_SPEC §1.5 (v3.1, additive — no on-disk schema change).
 
 ## Key Files
 
@@ -29,12 +31,17 @@ for solo developers managing many public GitHub repos).
 - `src/index.js` — entry point. No `environment` input read since
   v0.3.0.
 - `src/resolver.js` — embedded resolver port (v3 + auto-upgrade).
+- `src/timestamps.js` — dual-render UTC + IST helper (v3.1, per
+  SHARED_SPEC §1.5). Stdlib-only; used to format
+  `metadata.updated_at` in `core.info(...)` lines.
 - `dist/index.js` — `ncc`-bundled output (MUST be committed; CI
   enforces `git diff --quiet dist/`).
 - `tests/index.test.js` — covers AUDIT #3 ordering invariant and
   AUDIT #6 enc:* fail-fast paths.
 - `tests/resolver.test.js` — v3 happy paths + v1/v2 upgrade
   equivalence.
+- `tests/timestamps.test.js` — host-TZ-independent IST format
+  tests (load-bearing test toggles `process.env.TZ`).
 - `scripts/test.mjs` — cross-platform Node test runner used by
   `pnpm test`.
 
