@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node scripts/test.mjs",
     "build": "ncc build src/index.js -o dist --minify"
   },
   "dependencies": {
