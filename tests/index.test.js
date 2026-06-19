@@ -1,4 +1,4 @@
-import { test, mock } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run, buildEnvFile, maskAll } from '../src/index.js';
 
@@ -52,23 +52,50 @@ const baseInputs = {
   'vault-repo': 'org/vault',
   'vault-token': 'tok',
   'project-name': 'myproj',
-  environment: '',
   'output-file': '.env',
   'env-example': '.env.example',
   'export-to-env': 'false',
   'sync-github-secrets': 'false',
 };
 
+// Silence the loud upgrade warning during tests.
+const origWarn = console.warn;
+console.warn = () => {};
+
+// Build a v3 vault matching a flat-string v2 input so equivalence
+// tests can compare hand-written vs auto-upgraded outcomes.
+function v3Of(projects, shared = {}) {
+  const ts = '2026-06-19T10:00:00Z';
+  const wrapEntry = (val) => ({ value: val, _modified_at: ts });
+  return {
+    $schema: 'https://envpact.oriz.in/schema/v3.json',
+    version: 3,
+    shared: Object.fromEntries(
+      Object.entries(shared).map(([k, v]) => [k, wrapEntry(v)])
+    ),
+    projects: Object.fromEntries(
+      Object.entries(projects).map(([p, keys]) => [
+        p,
+        Object.fromEntries(
+          Object.entries(keys).map(([k, v]) => [k, wrapEntry(v)])
+        ),
+      ])
+    ),
+    metadata: { updated_at: ts },
+  };
+}
+
 test('buildEnvFile preserves orderedKeys and quotes values that need it', () => {
   const body = buildEnvFile(['A', 'B', 'C'], { A: 'simple', B: 'has space', C: 'plain' }, {
     timestamp: 'T',
     projectName: 'p',
-    environment: 'default',
   });
   // ordering preserved
   assert.match(body, /A=simple\nB="has space"\nC=plain\n$/);
   // header present
   assert.match(body, /# project: p/);
+  // v3: no `# environment:` line
+  assert.doesNotMatch(body, /# environment:/);
 });
 
 test('maskAll calls setSecret for every non-empty value', () => {
@@ -77,7 +104,7 @@ test('maskAll calls setSecret for every non-empty value', () => {
   assert.deepEqual(seen, ['x', 'y', 'z']);
 });
 
-test('run masks every resolved value BEFORE writing the .env file', async () => {
+test('run masks every resolved value BEFORE writing the .env file (v3)', async () => {
   const core = makeCore(baseInputs);
   const sharedCalls = [];
   const fs = makeFs(sharedCalls);
@@ -89,16 +116,9 @@ test('run masks every resolved value BEFORE writing the .env file', async () => 
     sharedCalls.push({ kind: 'setSecret', value: v });
   };
 
-  const vault = {
-    version: 2,
-    projects: {
-      myproj: {
-        A: 'aval',
-        B: 'bval',
-        C: 'cval',
-      },
-    },
-  };
+  const vault = v3Of({
+    myproj: { A: 'aval', B: 'bval', C: 'cval' },
+  });
 
   await run({
     core,
@@ -107,10 +127,8 @@ test('run masks every resolved value BEFORE writing the .env file', async () => 
     setRepoSecret: async () => {},
   });
 
-  // No failure
   assert.equal(core._failed, null);
 
-  // Every non-empty resolved value triggered setSecret
   const masked = sharedCalls
     .filter((c) => c.kind === 'setSecret')
     .map((c) => c.value)
@@ -129,21 +147,15 @@ test('run masks every resolved value BEFORE writing the .env file', async () => 
   }
 });
 
-test('run fails when a project value is a direct enc:* literal', async () => {
+test('run fails when a project value is a direct enc:* literal (v3)', async () => {
   const core = makeCore(baseInputs);
   const writes = [];
   const fs = makeFs(writes);
   const exportedSecrets = [];
 
-  const vault = {
-    version: 2,
-    projects: {
-      myproj: {
-        A: 'plain',
-        SECRET: 'enc:abc123',
-      },
-    },
-  };
+  const vault = v3Of({
+    myproj: { A: 'plain', SECRET: 'enc:abc123' },
+  });
 
   await run({
     core,
@@ -157,33 +169,24 @@ test('run fails when a project value is a direct enc:* literal', async () => {
   assert.ok(core._failed, 'should setFailed');
   assert.match(core._failed, /SECRET/);
   assert.match(core._failed, /envpact-cli/);
-  // No .env written
   assert.equal(writes.length, 0);
-  // No secrets synced
   assert.equal(exportedSecrets.length, 0);
-  // No exported env vars
   assert.deepEqual(core._vars, {});
 });
 
-test('run fails when an enc:* value is reached via shared.* indirection', async () => {
+test('run fails when an enc:* value is reached via shared.* indirection (v3)', async () => {
   const core = makeCore({ ...baseInputs, 'sync-github-secrets': 'true', 'export-to-env': 'true' });
   process.env.GITHUB_REPOSITORY = 'org/myproj';
   const writes = [];
   const fs = makeFs(writes);
   const exportedSecrets = [];
 
-  const vault = {
-    version: 2,
-    shared: {
-      DB_PASSWORD: 'enc:zzz',
+  const vault = v3Of(
+    {
+      myproj: { A: 'plain', DB_PASSWORD: 'shared.DB_PASSWORD' },
     },
-    projects: {
-      myproj: {
-        A: 'plain',
-        DB_PASSWORD: 'shared.DB_PASSWORD',
-      },
-    },
-  };
+    { DB_PASSWORD: 'enc:zzz' }
+  );
 
   await run({
     core,
@@ -196,32 +199,17 @@ test('run fails when an enc:* value is reached via shared.* indirection', async 
 
   assert.ok(core._failed, 'should setFailed');
   assert.match(core._failed, /DB_PASSWORD/);
-  // No .env written
   assert.equal(writes.length, 0);
-  // No secrets synced
   assert.equal(exportedSecrets.length, 0);
-  // No exported env vars
   assert.deepEqual(core._vars, {});
 });
 
 test('run fails defensively when an enc:* slips into resolved without being flagged', async () => {
-  // Defensive re-scan: even if a future resolver bug let an enc:* value
-  // through without populating result.encrypted, the action must still
-  // refuse to write it. Achieved here by stubbing resolveProject's output
-  // shape via a hand-crafted vault that the real resolver would already
-  // mark encrypted — proving the dual-check works.
   const core = makeCore(baseInputs);
   const writes = [];
   const fs = makeFs(writes);
 
-  const vault = {
-    version: 2,
-    projects: {
-      myproj: {
-        A: 'enc:another',
-      },
-    },
-  };
+  const vault = v3Of({ myproj: { A: 'enc:another' } });
 
   await run({
     core,
@@ -235,12 +223,107 @@ test('run fails defensively when an enc:* slips into resolved without being flag
   assert.equal(writes.length, 0);
 });
 
+test('run accepts v2 vault and produces same .env body as hand-written v3', async () => {
+  // v2 input — flat strings under a project, no _default_env
+  const v2 = {
+    version: 2,
+    shared: { K: 'shared-val' },
+    projects: {
+      myproj: {
+        A: 'shared.K',
+        PORT: '3000',
+        DBNAME: 'app',
+      },
+    },
+    metadata: { updated_at: '2026-01-01T00:00:00Z' },
+  };
+
+  const handV3 = v3Of({
+    myproj: { A: 'shared.K', PORT: '3000', DBNAME: 'app' },
+  }, { K: 'shared-val' });
+
+  const captureBody = async (vault) => {
+    const core = makeCore(baseInputs);
+    const writes = [];
+    const fs = makeFs(writes);
+    await run({
+      core,
+      fs,
+      fetchVault: async () => vault,
+      setRepoSecret: async () => {},
+    });
+    return { failed: core._failed, body: writes[0]?.body };
+  };
+
+  const v2Result = await captureBody(v2);
+  const v3Result = await captureBody(handV3);
+
+  assert.equal(v2Result.failed, null);
+  assert.equal(v3Result.failed, null);
+
+  // Strip the timestamp comment which differs between runs.
+  const stripTs = (s) => s.replace(/^# Generated by .*\n/, '');
+  assert.equal(stripTs(v2Result.body), stripTs(v3Result.body));
+  // Confirm the resolved keys made it into the file body.
+  assert.match(v2Result.body, /A=shared-val/);
+  assert.match(v2Result.body, /PORT=3000/);
+  assert.match(v2Result.body, /DBNAME=app/);
+});
+
+test('run accepts v1 (flat-string) vault and resolves correctly', async () => {
+  const v1 = {
+    version: 1,
+    shared: { K: 'sv' },
+    projects: {
+      myproj: { A: 'shared.K', B: 'literal' },
+    },
+  };
+
+  const core = makeCore(baseInputs);
+  const writes = [];
+  const fs = makeFs(writes);
+
+  await run({
+    core,
+    fs,
+    fetchVault: async () => v1,
+    setRepoSecret: async () => {},
+  });
+
+  assert.equal(core._failed, null);
+  assert.match(writes[0].body, /A=sv/);
+  assert.match(writes[0].body, /B=literal/);
+});
+
+test('run does NOT read an `environment` core input (v0.3.0 contract)', async () => {
+  const inputsAccessed = [];
+  const core = makeCore(baseInputs);
+  const origGetInput = core.getInput.bind(core);
+  core.getInput = (name, opts) => {
+    inputsAccessed.push(name);
+    return origGetInput(name, opts);
+  };
+  const fs = makeFs([]);
+  const vault = v3Of({ myproj: { A: 'val' } });
+
+  await run({
+    core,
+    fs,
+    fetchVault: async () => vault,
+    setRepoSecret: async () => {},
+  });
+
+  assert.ok(!inputsAccessed.includes('environment'),
+    `'environment' input must not be read; got: ${inputsAccessed.join(', ')}`);
+});
+
 test('run can be imported without firing the action (isMain gate)', () => {
-  // If importing the module had fired run(), reaching this assertion
-  // would already have been preceded by a network attempt to
-  // api.github.com. The fact that the earlier tests pass with deps
-  // injected is itself the proof; this test just pins the contract.
   assert.equal(typeof run, 'function');
   assert.equal(typeof buildEnvFile, 'function');
   assert.equal(typeof maskAll, 'function');
+});
+
+// Restore console.warn at module end so the global hijack doesn't leak.
+process.on('exit', () => {
+  console.warn = origWarn;
 });

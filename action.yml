@@ -17,10 +17,6 @@ inputs:
     description: 'Project to resolve secrets for. Defaults to current repository name.'
     required: false
     default: ''
-  environment:
-    description: 'Environment to resolve (development/staging/production). Defaults to "default".'
-    required: false
-    default: ''
   output-file:
     description: 'Path to write the resolved .env file'
     required: false
